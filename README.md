@@ -85,12 +85,14 @@ TMP를 사용하지 않고 일반적인 형태로 구현한 메모이제이션 �
     using container_t = typename container_of<Policy>::type;
     ```
     
-    - 컨테이너 정책 태그
+    - 캐시 제한 정책 태그
     ```cpp
     template <std::size_t N>
     struct limited {};
     
     struct unlimited {};
+    ```
+    각각에 대
 
     - 컨테이너 정책 태그
     ```cpp
