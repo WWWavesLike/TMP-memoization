@@ -62,7 +62,28 @@ TMP를 사용하지 않고 일반적인 형태로 구현한 메모이제이션 �
 
 ## 4.상세 구현
 
+1. 정책 태그 및 컨셉 정의
+    - 컨테이너 정책 태그
+    ```cpp
+    struct ordered {};
+struct unordered {};
 
+template <typename Policy>
+struct container_of;
+
+template <>
+struct container_of<ordered> {
+    using type = std::map</* key = std::tuple<Args...>, value = R */>;
+};
+
+template <>
+struct container_of<unordered> {
+    using type = std::unordered_map</* key = std::tuple<Args...>, value = R */>;
+};
+
+template <typename Policy>
+using container_t = typename container_of<Policy>::type; 
+    ```
 
 
 ## 5.결과
