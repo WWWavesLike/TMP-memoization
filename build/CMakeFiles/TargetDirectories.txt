@@ -1,0 +1,3 @@
+/home/waveslike/project/memoization/build/CMakeFiles/test.dir
+/home/waveslike/project/memoization/build/CMakeFiles/edit_cache.dir
+/home/waveslike/project/memoization/build/CMakeFiles/rebuild_cache.dir
