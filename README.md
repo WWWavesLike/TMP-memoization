@@ -20,7 +20,7 @@ C++ TMP를 활용하여 다음과 같은 특징을 가진 범용 메모이제이
 3. 캐시 제한 정책 :
     - unlimited : 무제한 캐시
     - limited<N> : std::size_t 상수 인자만큼의 데이터를 저장하고, 초과 시 LRU(Latest Recently Used) 방식으로 제거
-    - 
+      
 4. 인자 튜플을 키로 사용하는 캐시 구조
     - std::tuple<함수 인자...>를 키로 사용
 
