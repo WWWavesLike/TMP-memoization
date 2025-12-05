@@ -62,41 +62,211 @@ TMP를 사용하지 않고 일반적인 형태로 구현한 메모이제이션 �
 
 ## 4.상세 구현
 
-1. 정책 태그 및 컨셉 정의
-    - 컨테이너 정책 태그
+1. 반환 타입에 대한 제약
     ```cpp
+    template <typename R>
+    concept deterministic =
+	std::regular<R>;
+    ```
+    메모이제이션을 사용하기 위해선 반환타입이 레귤러 타입이어야한다. 레귤러 타입은 다음과 같은 특징을 가진다.
+   
+    - 복사 가능
+    - 동등 비교 가능
+    - 소멸 시 자원 해제
+    - 이동 가능
+    - 기본 생성 가능
+    - 
+    이러한 제약을 설정한 이유는, 등록되는 함수를 순수 함수로 제한하기 위함이다.
+
+    순수 함수란 완전성(어떤 입력에 대해서든 항상 같은 출력이 나옴), 부수효과가 없음, 불변성을 만족하는 함수를 말한다.
+
+    메모이제이션의 함수로 쓰기 위해선 완전성, 부수효과 없음을 만족해야 하지만,
+
+    C++에서는 순수 함수를 강제하기 위한 문법이 존재하지 않는다. (constexpr(상수표현식) 함수는 부수효과 없음, 완전성을 강제하지 못한다.)
+
+    강제할 수 없기 때문에, 순수 함수만을 쓰도록 유도하는 방법을 사용해야한다.
+
+    레귤러 타입만 반환하게 함으로써 해당 함수가 부수효과 없이 값 기반의 추론이 가능한 순수 함수처럼 사용되도록 설계적 제약을 부여한다.
+
+    이외에 추가적인 제약이 필요한 경우, deterministic 컨셉에 제약을 추가할 수 있도록 설계했다.
+
+3. 정책 태그 및 컨셉 정의
+
+    정책 태그와 컨셉에 대한 코드이다. 주석을 통해 상세 내용을 설명한다.
+    - 컨테이너 정책
+    ```cpp
+    // 컨테이너 정책.
+    // 태그 구조체들로 정책을 나타낸다.
+    // ordered, unordered는 태그 타입으로 ordered는 std::map 자료구조, unordered는 std::unordered_map을 사용한다.
     struct ordered {};
     struct unordered {};
-
-    template <typename Policy>
+    
+    // 태그 구조체를 담는 구조체.
+    // 각각 ordered와 unordered 특수화로 연결된다.
+    template <typename Tag, typename K, typename V>
     struct container_of;
-
-    template <>
-    struct container_of<ordered> {
-        using type = std::map</* key = std::tuple<Args...>, value = R */>;
+    
+    // ordered 특수화.
+    // std::map으로 연결된다.
+    template <typename K, typename V>
+    struct container_of<ordered, K, V> {
+    	using type = std::map<K, V>;
     };
     
-    template <>
-    struct container_of<unordered> {
-        using type = std::unordered_map</* key = std::tuple<Args...>, value = R */>;
+    // unordered 특수화.
+    // std::unordered_map으로 연결된다.
+    template <typename K, typename V>
+    struct container_of<unordered, K, V> {
+    	using type = std::unordered_map<K, V>;
     };
     
-    template <typename Policy>
-    using container_t = typename container_of<Policy>::type;
+    template <typename Tag, typename K, typename V>
+    using container_t = typename container_of<Tag, K, V>::type;
+    
+    // 정책 태그가 ordered인지, unordered인지 확인하는 컨셉.
+    // 두 정책 모두 아닌 경우 컴파일 오류.
+    template <typename P>
+    concept container_policy = std::same_as<P, ordered> ||
+    						   std::same_as<P, unordered>;
     ```
     
-    - 캐시 제한 정책 태그
+    - 캐시 제한 정책
     ```cpp
-    template <std::size_t N>
+    // 제한 태그, 제한 숫자를 상수 템플릿 인자로 받는다.
+    template <std::size_t Size>
     struct limited {};
     
+    // size_t 인자가 아닌 경우 false_type으로 설정된다.
+    // 이를 이용해 다른 인자가 들어온 경우 오류가 된다.
+    // same_as<L, limit<size_t>>로 비교하는 건 size_t의 상수 인자값을 알 수가 없으므로 불가능하다.
+    template <typename T>
+    struct is_limited : std::false_type {};
+    
+    // 특수화를 통해 size_t로 연결.
+    template <std::size_t Size>
+    struct is_limited<limited<Size>> : std::true_type {};
+    
+    // 무제한.
     struct unlimited {};
+    
+    template <typename L>
+    concept limit_policy = std::same_as<L, unlimited> ||
+                       is_limited<L>::value;
+    
+    // unlimited인 경우 해당 구조체를 상속 받음.
+    template <typename Limit, typename T>
+    struct sub_container {};
+    
+    // Limit가 limited<Size>일 때만 특수화.
+    template <std::size_t Size, typename T>
+    struct sub_container<limited<Size>, T> {
+        using type = typename T::iterator;
+        static constexpr std::size_t size = Size;
+        // 캐시 순서를 관리하기 위한 목적의 list 자료구조.
+        // unordered_map, map은 넣은 순서대로 유지되지 않기 때문에
+        // 별도의 자료구조를 통해 LRU 매커니즘을 구현한다.
+        std::list<type> insertion_order;
+    };
     ```
-    각각에 대
+    sub_container 구조체의 limited<Size> 특수화를 통해 limited 정책일 때만 해당 구조체가 상속되도록 하여 불필요한 코드 확장을 막는다.
 
-    - 컨테이너 정책 태그
+    - 메모이제이션 클래스
     ```cpp
+    // 기본 템플릿. 미지정 시 ordered, unlimited로 정책이 설정된다.
+    template <typename Signature, typename Order = ordered, typename Limit = unlimited>
+    class memoization;
+    
+    // 특수화. 본체 템플릿.
+    template <typename R, typename... Args, typename Order, typename Limit>
+    // 정책 확인
+    // 1.반환값은 레귤러 타입어야한다.
+    // 2.컨테이너를 해쉬맵 또는 맵 중 하나를 선택한다.
+    // 3.캐싱 제한 여부와 제한 수를 설정한다.
+    	requires deterministic<R> && container_policy<Order> && limit_policy<Limit>
+    class memoization<R(Args...), Order, Limit>
+    	: public sub_container<Limit, container_t<Order, std::tuple<std::decay_t<Args>...>, R>> {
+    private:
+    	// 함수 인자를 tuple로 저장.
+    	using args_type = std::tuple<std::decay_t<Args>...>;
+    	// 반환값.
+    	using return_type = R;
+    	// 정책에 따른 자료구조 별칭.
+    	container_t<Order, args_type, return_type> values_map;
+    	std::function<R(Args...)> func;
+    
+    public:
+    	// 함수가 정의되지 않은 상태에서 함수가 호출되는 문제를 방지하기 위해
+    	// 기본 생성자를 delete한다.
+    	memoization() = delete;
+    	template <typename F>
+    	memoization(F &&f) : func{std::forward<F>(f)} {}
+    	memoization(const memoization &) = default;
+    	memoization(memoization &&) noexcept = default;
+    	memoization &operator=(const memoization &) = default;
+    	memoization &operator=(memoization &&) noexcept = default;
+    
+    	R operator()(Args... args) {
+    		// std::tuple의 별칭.
+    		args_type key(std::forward<Args>(args)...);
+    		auto it = values_map.find(key);
+    		// 캐시 히트한 경우 결과를 바로 꺼내서 반환한다.
+    		if (it != values_map.end()) {
+    			// limited인 경우 LRU 정책에 따라 갱신을 위해 참조한 원소를 맨 뒤로 보낸다.
+    			if constexpr (!std::same_as<Limit, unlimited>) {
+    				auto node = std::find(this->insertion_order.begin(),
+    									  this->insertion_order.end(),
+    									  it);
+    				if (node != this->insertion_order.end()) {
+    					this->insertion_order.splice(this->insertion_order.end(), this->insertion_order, node);
+    				}
+    			}
+    			// 결과 반환.
+    			return it->second;
+    		}
+    		// 없는 경우 함수를 실행한다.
+    		R result = func(std::forward<Args>(args)...);
+    		// limited인 경우 제한 수를 초과하는지 확인하여 가장 사용한지 오래된 원소를 삭제한다.
+    		if constexpr (!std::same_as<Limit, unlimited>) {
+    			if (values_map.size() >= this->size && !values_map.empty() && !this->insertion_order.empty()) {
+    				values_map.erase(this->insertion_order.front());
+    				this->insertion_order.pop_front();
+    			}
+    			// 새 원소를 value_map과 isertion_order에 삽입한다.
+    			auto [new_it, bool_value] = values_map.emplace(std::move(key), result);
+    			this->insertion_order.push_back(new_it);
+    		} else {
+    			// unlimited인 경우 바로 삽입한다.
+    			values_map.emplace(std::move(key), result);
+    		}
+    		return result;
+    	}
+    };
+    ```
 
+    - std::tuple 해쉬 함수 구현 특수화
+    ```cpp
+    // 튜플 전용 해쉬 함수 특수화.
+    // std::tuple은 unordered_map에 들어갈 때 해쉬 함수가 존재하지 않아 넣을 수가 없다.
+    // 전용 해쉬함수를 추가하여 unordered_map의 키값으로 들어갈 수 있다.
+    namespace std {
+    template <typename... Ts>
+    struct hash<tuple<Ts...>> {
+    	size_t operator()(tuple<Ts...> const &t) const noexcept {
+    		size_t seed = 0;
+    		apply([&](auto const &...elems) {
+    			((
+    				 seed ^= std::hash<std::decay_t<decltype(elems)>>{}(elems) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2)),
+    			 ...);
+    		},
+    			  t);
+    
+    		return seed;
+    	}
+    };
+    
+    } // namespace std
+    ```
+---
 ## 5.결과
 1. C++ 20 TMP와 Concepts을 활용하여 정책 기반 메모이제이션 라이브러리를 설계, 구현하였다.
 2. 컨테이너 정책, 캐시 제한 정책을 컴파일 타임에 조합 가능하도록 일반화했으며, 잘못된 조합은 컴파일 타임에서 차단된다.
