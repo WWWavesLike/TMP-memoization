@@ -66,7 +66,7 @@ TMP를 사용하지 않고 일반적인 형태로 구현한 메모이제이션 �
     - 컨테이너 정책 태그
     ```cpp
     struct ordered {};
-struct unordered {};
+    struct unordered {};
 
 template <typename Policy>
 struct container_of;
@@ -83,7 +83,7 @@ struct container_of<unordered> {
 
 template <typename Policy>
 using container_t = typename container_of<Policy>::type; 
-    ```
+
 
 
 ## 5.결과
