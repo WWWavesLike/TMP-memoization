@@ -192,6 +192,9 @@ TMP를 사용하지 않고 일반적인 형태로 구현한 메모이제이션 �
     // 3.캐싱 제한 여부와 제한 수를 설정한다.
     	requires deterministic<R> && container_policy<Order> && limit_policy<Limit>
     class memoization<R(Args...), Order, Limit>
+    	// sub_container를 상속받는다.
+		// unlimited인 경우 빈 구조체 sub_container(기본)를 상속받고,
+		// limited인 경우 연결리스트를 가진 sub_container(특수화)를 상속 받는다.
     	: public sub_container<Limit, container_t<Order, std::tuple<std::decay_t<Args>...>, R>> {
     private:
     	// 함수 인자를 tuple로 저장.
