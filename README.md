@@ -82,9 +82,17 @@ TMP를 사용하지 않고 일반적인 형태로 구현한 메모이제이션 �
     };
     
     template <typename Policy>
-    using container_t = typename container_of<Policy>::type; 
+    using container_t = typename container_of<Policy>::type;
+    
+    - 컨테이너 정책 태그
+    ```cpp
+    template <std::size_t N>
+    struct limited {};
+    
+    struct unlimited {};
 
-
+    - 컨테이너 정책 태그
+    ```cpp
 
 ## 5.결과
 1. C++ 20 TMP와 Concepts을 활용하여 정책 기반 메모이제이션 라이브러리를 설계, 구현하였다.
