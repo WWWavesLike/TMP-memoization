@@ -187,7 +187,7 @@ TMP를 사용하지 않고 일반적인 형태로 구현한 메모이제이션 �
     // 특수화. 본체 템플릿.
     template <typename R, typename... Args, typename Order, typename Limit>
     // 정책 확인
-    // 1.반환값은 레귤러 타입어야한다.
+    // 1.반환값은 레귤러 타입이어야한다.
     // 2.컨테이너를 해쉬맵 또는 맵 중 하나를 선택한다.
     // 3.캐싱 제한 여부와 제한 수를 설정한다.
     	requires deterministic<R> && container_policy<Order> && limit_policy<Limit>
